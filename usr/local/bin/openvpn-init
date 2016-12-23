@@ -124,6 +124,9 @@ export OPENVPN_SUBNET_BASE
 export OPENVPN_LINKED_SUBNET
 envsubst < server.conf.template > server.conf
 
+echo '+ initialisation complete'
 if [ "${1}" = "--only-generate" ]; then
-	openvpn --config /etc/openvpn/server.conf
+	exit 0
 fi
+
+openvpn --config /etc/openvpn/server.conf
