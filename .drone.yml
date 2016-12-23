@@ -1,0 +1,16 @@
+pipeline:
+  docker:
+    repo: armswarm/openvpn
+    tag: [ "latest" ]
+    build_args:
+      - VCS_REF=${DRONE_COMMIT_SHA}
+      - VCS_URL=${DRONE_REPO_LINK}
+      - BUILD_DATE=${DRONE_BUILD_CREATED}
+      - PROJECT_NAME=${DRONE_REPO}
+    when:
+      branch: master
+      event: push
+
+  slack:
+    when:
+      status: [ failure, success ]
