@@ -1,0 +1,68 @@
+#!/bin/sh
+
+fail() {
+	echo "+ error: ${1}"
+	exit 1
+}
+
+if [ "$#" -ne 1 ]; then
+	echo "usage: $0 <name>"
+	exit 1
+fi
+
+CONF_DIR="${CONF_DIR:-/etc/openvpn}"
+SECRETS_DIR="${CONF_DIR}/secrets"
+KEY_ALGO="${KEY_ALGO:-rsa}"
+KEY_SIZE="${KEY_SIZE:-2048}"
+
+if [ ! -f "${SECRETS_DIR}/ca.pem" ] || [ ! -f "${SECRETS_DIR}/ca-key.pem" ] || [ ! -f "${SECRETS_DIR}/ca-config.json" ]; then
+	fail "CA files missing, please run openvpn-init"
+fi
+
+if [ ! -f "${SECRETS_DIR}/server.pem" ] || [ ! -f "${SECRETS_DIR}/server-key.pem" ] || [ ! -f "${SECRETS_DIR}/ta.key" ] || [ ! -f "${CONF_DIR}/server.conf" ]; then
+	fail "server config incomplete, please run openvpn-init"
+fi
+
+OPENVPN_CIPHER=$(grep '^cipher' /etc/openvpn/server.conf | awk '{ print $2; }')
+OPENVPN_DIGEST=$(grep '^auth' /etc/openvpn/server.conf | awk '{ print $2; }')
+CA_ORG="$(cfssl certinfo -cert=/etc/openvpn/secrets/ca.pem | jq -r '.subject.organization')"
+SERVER_NAME="$(cfssl certinfo -cert=/etc/openvpn/secrets/server.pem | jq -r '.subject.common_name')"
+CLIENT_NAME="${1}"
+
+workdir=$(mktemp -d)
+current_path=${PWD}
+
+cd ${workdir} || fail "cannot access ${workdir}"
+
+cat <<CONFIG | cfssl gencert -ca=${SECRETS_DIR}/ca.pem -ca-key=${SECRETS_DIR}/ca-key.pem -config=${SECRETS_DIR}/ca-config.json -profile=client - | cfssljson -bare ${CLIENT_NAME}
+{
+	"CN": "${CLIENT_NAME}",
+	"names": [
+		{
+			"O": "${CA_ORG}",
+			"OU": "OpenVPN Clients"
+		}
+	],
+	"key": {
+		"algo": "${KEY_ALGO}",
+		"size": ${KEY_SIZE}
+	}
+}
+CONFIG
+
+cp "${SECRETS_DIR}/ca.pem" "${SECRETS_DIR}/ta.key" .
+
+export CA_ORG
+export SERVER_NAME
+export CLIENT_NAME
+export OPENVPN_CIPHER
+export OPENVPN_DIGEST
+envsubst < "${CONF_DIR}/client.conf.template" > client.conf
+
+tar czvf "${CLIENT_NAME}.tgz" "${CLIENT_NAME}.pem" "${CLIENT_NAME}-key.pem" ca.pem ta.key client.conf
+
+cd ${current_path} || fail "cannot access ${current_path}"
+
+mv "${workdir}/${CLIENT_NAME}.tgz" .
+
+rm -rf ${workdir}

@@ -1,0 +1,23 @@
+tls-client
+
+remote ${SERVER_NAME} 1194 udp
+
+tls-version-min 1.2
+cipher ${OPENVPN_CIPHER}
+auth ${OPENVPN_DIGEST}
+
+verify-x509-name 'O=${CA_ORG}, OU=${CA_ORG} Machines, CN=${SERVER_NAME}' subject
+remote-cert-eku "TLS Web Server Authentication"
+
+ca ca.pem
+cert ${CLIENT_NAME}.pem
+key ${CLIENT_NAME}-key.pem
+tls-auth ta.key 1
+
+dev tun
+persist-tun
+persist-key
+pull
+comp-lzo adaptive
+nobind
+link-mtu 1558

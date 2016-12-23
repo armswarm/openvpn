@@ -1,0 +1,129 @@
+#!/bin/sh
+
+fail() {
+	echo "+ error: ${1}"
+	exit 1
+}
+
+if [ "$#" -gt 1 ]; then
+	echo "usage: $0 [--only-generate]"
+	exit 1
+fi
+
+if [ "$#" -eq 1 ] && [ "${1}" != "--only-generate" ]; then
+	echo "usage: $0 [--only-generate]"
+	exit 1
+fi
+
+CONF_DIR="${CONF_DIR:-/etc/openvpn}"
+SECRETS_DIR="${CONF_DIR}/secrets"
+DH_KEY_SIZE="${DH_KEY_SIZE:-2048}"
+KEY_ALGO="${KEY_ALGO:-rsa}"
+KEY_SIZE="${KEY_SIZE:-2048}"
+OPENVPN_CIPHER="${OPENVPN_CIPHER:-AES-256-CBC}"
+OPENVPN_DIGEST="${OPENVPN_DIGEST:-SHA384}"
+OPENVPN_SUBNET="${OPENVPN_SUBNET:-10.7.7.0}"
+OPENVPN_SUBNET_BASE="$(echo ${OPENVPN_SUBNET} | cut -d. -f1-3)"
+
+[ ! -z "${CA_ORG}" ] || fail '$CA_ORG is not set'
+[ ! -z "${SERVER_NAME}" ] || fail '$SERVER_NAME is not set'
+[ ! -z "${OPENVPN_LINKED_SUBNET}" ] || fail '$OPENVPN_LINKED_SUBNET is not set'
+
+[ -d "${SECRETS_DIR}" ] || mkdir -p "${SECRETS_DIR}"
+
+cd "${SECRETS_DIR}" || fail "cannot access ${SECRETS_DIR}"
+
+if [ ! -f "${SECRETS_DIR}/dh${DH_KEY_SIZE}.pem" ]; then
+	echo '+ generating DH key ...'
+	openssl dhparam -out "dh${DH_KEY_SIZE}.pem" ${DH_KEY_SIZE}
+fi
+
+if [ ! -f "${SECRETS_DIR}/ta.key" ]; then
+	echo '+ generating tls-auth key ...'
+	openvpn --genkey --secret ta.key
+fi
+
+if [ ! -f "${SECRETS_DIR}/ca.pem" ] || [ ! -f "${SECRETS_DIR}/ca-key.pem" ]; then
+	echo '+ generating ca ...'
+	cat <<-CONFIG | cfssl gencert -initca - | cfssljson -bare ca -
+		{
+			"CN": "${CA_ORG} OpenVPN Root CA",
+			"names": [
+				{
+					"O": "${CA_ORG}"
+				}
+			],
+			"key": {
+				"algo": "${KEY_ALGO}",
+				"size": ${KEY_SIZE}
+			}
+		}
+	CONFIG
+fi
+
+cat <<-CONFIG  > ca-config.json
+	{
+		"signing": {
+			"default": {
+				"expiry": "8760h"
+			},
+			"profiles": {
+				"server": {
+					"expiry": "35040h",
+					"usages": [
+						"signing",
+						"key encipherment",
+						"server auth"
+					]
+				},
+				"client": {
+					"expiry": "8760h",
+					"usages": [
+						"signing",
+						"key encipherment",
+						"client auth"
+					]
+				}
+			}
+		}
+	}
+CONFIG
+
+if [ ! -f "${SECRETS_DIR}/server.pem" ] || [ ! -f "${SECRETS_DIR}/server-key.pem" ]; then
+	echo '+ generating server key ...'
+	cat <<-CONFIG | cfssl gencert -config=ca-config.json -ca=ca.pem -ca-key=ca-key.pem -profile=server -hostname="${SERVER_NAME}" - | cfssljson -bare server
+		{
+			"CN": "${SERVER_NAME}",
+			"names": [
+				{
+					"O": "${CA_ORG}",
+					"OU": "${CA_ORG} Machines"
+				}
+			],
+			"hosts": [
+				""
+			],
+			"key": {
+				"algo": "${KEY_ALGO}",
+				"size": ${KEY_SIZE}
+			}
+		}
+	CONFIG
+fi
+
+cd "${CONF_DIR}" || fail "cannot access ${CONF_DIR}"
+
+echo '+ producing configuration ...'
+export CA_ORG
+export CONF_DIR
+export SECRETS_DIR
+export DH_KEY_SIZE
+export OPENVPN_CIPHER
+export OPENVPN_DIGEST
+export OPENVPN_SUBNET_BASE
+export OPENVPN_LINKED_SUBNET
+envsubst < server.conf.template > server.conf
+
+if [ "${1}" = "--only-generate" ]; then
+	openvpn --config /etc/openvpn/server.conf
+fi

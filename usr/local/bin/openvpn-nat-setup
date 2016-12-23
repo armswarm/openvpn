@@ -1,0 +1,12 @@
+#!/bin/sh
+
+[ ! -z "${script_type:-}" ] || exit 0
+
+case "$script_type" in
+  up)
+	iptables -t nat -A POSTROUTING -j MASQUERADE
+	;;
+  down)
+	iptables -t nat -D POSTROUTING -j MASQUERADE
+	;;
+esac

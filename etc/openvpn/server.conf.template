@@ -1,0 +1,43 @@
+user nobody
+group nogroup
+
+verb 1
+log /dev/stdout
+status /openvpn-status 20
+
+dev tun
+proto udp
+port 1194
+keepalive 10 120
+
+tls-version-min 1.2
+cipher ${OPENVPN_CIPHER}
+auth ${OPENVPN_DIGEST}
+
+ca ${SECRETS_DIR}/ca.pem
+cert ${SECRETS_DIR}/server.pem
+key ${SECRETS_DIR}/server-key.pem
+dh ${SECRETS_DIR}/dh${DH_KEY_SIZE}.pem
+tls-auth ${SECRETS_DIR}/ta.key 0
+
+duplicate-cn
+comp-lzo
+persist-key
+persist-tun
+client-to-client
+
+# network setup
+server ${OPENVPN_SUBNET_BASE}.0 255.255.255.0
+ifconfig ${OPENVPN_SUBNET_BASE}.1 ${OPENVPN_SUBNET_BASE}.2
+
+# client configuration
+push "route ${OPENVPN_SUBNET_BASE}.0 255.255.255.0"
+push "route ${OPENVPN_SUBNET_BASE}.1 255.255.255.255"
+
+# extra networks
+push "route ${OPENVPN_LINKED_SUBNET} 255.255.255.0"
+
+# nat setup
+script-security 2
+up /usr/local/bin/openvpn-nat-setup
+down /usr/local/bin/openvpn-nat-setup
