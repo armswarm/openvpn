@@ -31,4 +31,4 @@ ADD . /
 
 EXPOSE 1194
 
-CMD ["/usr/local/bin/openvpn-init"]
+ENTRYPOINT ["/usr/local/bin/openvpn-init"]
