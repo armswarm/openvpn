@@ -1,7 +1,17 @@
 # openvpn
-[![](https://images.microbadger.com/badges/image/armswarm/openvpn.svg)](https://microbadger.com/images/armswarm/openvpn "Get your own image badge on microbadger.com") [![](https://images.microbadger.com/badges/version/armswarm/openvpn.svg)](https://microbadger.com/images/armswarm/openvpn "Get your own version badge on microbadger.com") [![](https://images.microbadger.com/badges/commit/armswarm/openvpn.svg)](https://microbadger.com/images/armswarm/openvpn "Get your own commit badge on microbadger.com") [![Build Status](https://drone.veiled.land/api/badges/armswarm/openvpn/status.svg)](https://drone.veiled.land/armswarm/openvpn)
 
-OpenVPN docker image, for ARM.
+---
+**NOTE:**
+
+**This repository has been archived. It has not been update for quite some time and there is no intention of maintaining it.
+Please use a different image.**
+
+---
+
+[![Docker Repository on Quay](https://quay.io/repository/armswarm/openvpn/status "Docker Repository on Quay")](https://quay.io/repository/armswarm/openvpn)
+
+This repository builds the openvpn image for ARM.
+
 
 To run the container:
 ```
